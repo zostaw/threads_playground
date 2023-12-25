@@ -135,13 +135,13 @@ where
     println!("Total time: {:?}\n", total_start.elapsed());
 }
 
-fn chatgpt_rayon_threads1() {
-    // Create a vector of numbers from 1 to 1 million
-    let numbers: Vec<u64> = (1..=1_000_000).collect();
+fn chatgpt_rayon_threads1(num: u128) {
+    // Create a vector of numbers from 1 to gen_num
+    let numbers: Vec<u128> = (1..=num).collect();
 
     let toyme = Instant::now();
     // Sequential sum of squares
-    let sequential_sum: u64 = numbers.iter().map(|&x| x * x).sum();
+    let sequential_sum: u128 = numbers.iter().map(|&x| x * x).sum();
     println!(
         "Sequential Sum: {} executed in {:?}",
         sequential_sum,
@@ -150,7 +150,7 @@ fn chatgpt_rayon_threads1() {
 
     let toyme = Instant::now();
     // Parallel sum of squares using threads
-    let thread_sum: u64 =
+    let thread_sum: u128 =
         {
             let chunk_size = numbers.len() / 2;
             let numbers_clone = numbers.clone();
@@ -160,7 +160,7 @@ fn chatgpt_rayon_threads1() {
                     numbers_clone[..chunk_size]
                         .iter()
                         .map(|&x| x * x)
-                        .sum::<u64>()
+                        .sum::<u128>()
                 });
 
             let numbers_clone = numbers.clone();
@@ -169,7 +169,7 @@ fn chatgpt_rayon_threads1() {
                     numbers_clone[chunk_size..]
                         .iter()
                         .map(|&x| x * x)
-                        .sum::<u64>()
+                        .sum::<u128>()
                 });
 
             let sum1 = handle1.join().unwrap();
@@ -186,7 +186,7 @@ fn chatgpt_rayon_threads1() {
     let toyme = Instant::now();
 
     // Parallel sum of squares using rayon
-    let parallel_sum: u64 = numbers.par_iter().map(|&x| x * x).sum();
+    let parallel_sum: u128 = numbers.par_iter().map(|&x| x * x).sum();
     println!(
         "Rayon Sum: {} executed in {:?}\n",
         parallel_sum,
@@ -194,13 +194,13 @@ fn chatgpt_rayon_threads1() {
     );
 }
 
-fn chatgpt_rayon_threads2() {
+fn chatgpt_rayon_threads2(num: u128) {
     // Create a large vector of numbers
-    let numbers: Vec<u64> = (1..=1_000_000).collect();
+    let numbers: Vec<u128> = (1..=num).collect();
 
     let toyme = Instant::now();
     // Sequential sum of numbers
-    let sequential_sum: u64 = numbers.iter().sum();
+    let sequential_sum: u128 = numbers.iter().sum();
     println!(
         "Sequential Sum: {} executed in {:?}",
         sequential_sum,
@@ -209,16 +209,16 @@ fn chatgpt_rayon_threads2() {
 
     let toyme = Instant::now();
     // Parallel sum of numbers using threads
-    let thread_sum: u64 =
+    let thread_sum: u128 =
         {
             let chunk_size = numbers.len() / 2;
             let numbers_clone = numbers.clone();
 
-            let handle1 = thread::spawn(move || numbers_clone[..chunk_size].iter().sum::<u64>());
+            let handle1 = thread::spawn(move || numbers_clone[..chunk_size].iter().sum::<u128>());
 
             let numbers_clone = numbers.clone();
 
-            let handle2 = thread::spawn(move || numbers_clone[chunk_size..].iter().sum::<u64>());
+            let handle2 = thread::spawn(move || numbers_clone[chunk_size..].iter().sum::<u128>());
 
             let sum1 = handle1.join().unwrap();
             let sum2 = handle2.join().unwrap();
@@ -234,7 +234,7 @@ fn chatgpt_rayon_threads2() {
 
     let toyme = Instant::now();
     // Parallel sum of numbers using rayon
-    let parallel_sum: u64 = numbers.par_iter().cloned().sum();
+    let parallel_sum: u128 = numbers.par_iter().cloned().sum();
     println!(
         "Rayon Sum: {} executed in {:?}\n",
         parallel_sum,
@@ -264,9 +264,10 @@ fn main() {
     println!("Parallel atomic fibonacci...");
     parallel(fibonacci_atomic_rayon, gen_num, times);
 
+    let num = 100_000_000;
     println!("__________________\nDifferent benchmark, comparing atomic calculations between different approaches...\n");
-    println!("Sum of squares of 10e6...");
-    chatgpt_rayon_threads1();
-    println!("Simple sum of 10e6...");
-    chatgpt_rayon_threads2();
+    println!("Sum of squares of {}...", num);
+    chatgpt_rayon_threads1(num);
+    println!("Simple sum of {}...", num);
+    chatgpt_rayon_threads2(num);
 }

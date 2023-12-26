@@ -22,10 +22,11 @@ fn fibonacci_atomic_rayon(num: i128) -> i128 {
         1 | 2 => 1,
         _ => {
             let prevs = vec![num - 1, num - 2];
-            let result = prevs
-                .par_iter()
-                .map(|x| fibonacci_atomic_rayon(*x))
-                .sum::<i128>();
+            rayon::join(
+                || fibonacci_atomic_rayon(prevs[0]),
+                || fibonacci_atomic_rayon(prevs[1]),
+            );
+
             return result;
         }
     }
@@ -254,6 +255,9 @@ fn main() {
 
     println!("Sequential fibonacci...");
     sequential(fibonacci, gen_num, times);
+
+    println!("Sequential with atomic fibonacci...");
+    sequential(fibonacci_atomic_rayon, gen_num, times);
 
     println!("Threaded fibonacci...");
     threaded(fibonacci, gen_num, times);

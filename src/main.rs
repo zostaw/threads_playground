@@ -1,7 +1,7 @@
 use rayon::prelude::*;
-use std::sync::mpsc;
 use std::thread;
 use std::time::{Duration, Instant};
+use tokio::runtime::Handle;
 
 fn fibonacci(num: i128) -> i128 {
     match num {
@@ -26,6 +26,8 @@ fn fibonacci_atomic_rayon(num: i128) -> i128 {
                 || fibonacci_atomic_rayon(prevs[0]),
                 || fibonacci_atomic_rayon(prevs[1]),
             );
+
+            let result = prevs.iter().sum::<i128>();
 
             return result;
         }
@@ -63,6 +65,7 @@ fn threaded<F>(f: F, gen_num: i128, times: usize)
 where
     F: FnOnce(i128) -> i128 + std::marker::Send + 'static + Copy,
 {
+    use std::sync::mpsc;
     let total_start = Instant::now();
     let mut results: Vec<i128> = Vec::new();
     let mut durations: Vec<Duration> = Vec::new();
@@ -132,6 +135,63 @@ where
         average_duration
     );
 
+    println!("Total cpu time: {:?}", total_cpu_time);
+    println!("Total time: {:?}\n", total_start.elapsed());
+}
+
+async fn tokioed<F>(f: F, gen_num: i128, threads: usize, tasks: usize)
+where
+    F: FnOnce(i128) -> i128 + std::marker::Send + 'static + Copy,
+{
+    use tokio::sync::mpsc;
+    let total_start = Instant::now();
+    let mut results: Vec<i128> = Vec::new();
+    let mut durations: Vec<Duration> = Vec::new();
+
+    let (tx, mut rx) = mpsc::channel(threads * tasks + 1);
+
+    let threads: Vec<_> = (0..threads)
+        .map(|_thread_id| {
+            let handle = Handle::current();
+
+            let tx_clone = tx.clone();
+            thread::spawn(move || {
+                for _task_id in 0..tasks {
+                    let tx_clones_clone = tx_clone.clone();
+                    handle.spawn(async move {
+                        let start = Instant::now();
+                        let result = f(gen_num);
+                        let duration = start.elapsed();
+                        let _ = tx_clones_clone.send((result, duration)).await;
+                    });
+                }
+            })
+        })
+        .collect();
+
+    for t in threads {
+        t.join().expect("Thread panicked");
+    }
+
+    drop(tx);
+
+    while let Some(message) = rx.recv().await {
+        match message {
+            rslt => {
+                results.push(rslt.0);
+                durations.push(rslt.1);
+            }
+        };
+    }
+
+    let total_cpu_time: Duration = durations.iter().map(|&d| d).sum();
+    let average_duration = total_cpu_time / durations.len() as u32;
+    println!(
+        "f({})={}, average time: {:?}",
+        gen_num,
+        results.first().expect("No result of threaded calculated."),
+        average_duration
+    );
     println!("Total cpu time: {:?}", total_cpu_time);
     println!("Total time: {:?}\n", total_start.elapsed());
 }
@@ -243,7 +303,8 @@ fn chatgpt_rayon_threads2(num: u128) {
     );
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let gen_num = 38;
     let times = 64;
 
@@ -264,6 +325,18 @@ fn main() {
 
     println!("Parallel fibonacci...");
     parallel(fibonacci, gen_num, times);
+
+    println!("Tokio fibonacci (only threads [{}])...", times);
+    tokioed(fibonacci, gen_num, times, 1).await;
+
+    println!("Tokio fibonacci (only tasks [{}])...", times);
+    tokioed(fibonacci, gen_num, 1, times).await;
+
+    println!("Tokio fibonacci (8 threads, 8 tasks)...");
+    tokioed(fibonacci, gen_num, 8, 8).await;
+
+    println!("Tokio fibonacci (4 threads, 16 tasks)...");
+    tokioed(fibonacci, gen_num, 4, 16).await;
 
     println!("Parallel atomic fibonacci...");
     parallel(fibonacci_atomic_rayon, gen_num, times);
